@@ -1,16 +1,38 @@
+"""
+Contains various bits and pieces needed for the method described in the paper: 
+Momentum Contrast for Unsupervised Visual Representation Learning 
+(https://arxiv.org/abs/1911.05722)
+"""
+
 import tensorflow as tf
 
 
+def update_model_via_ema(
+    model, ema_model, momentum, just_trainable_vars=False
+):
+    iterable = (
+        zip(model.trainable_variables, ema_model.trainable_variables)
+        if just_trainable_vars
+        else zip(model.variables, ema_model.variables)
+    )
+    for p, p2 in iterable:
+        p2.assign(momentum * p2 + (1.0 - momentum) * p)
+
+
 class EmulateMultiGPUBatchNorm(tf.keras.layers.Layer):
+    """Emulates behaviour of batch norm when training on multi GPUs when only a single 
+    GPU is being used. This technique is used in the paper (see heading 'Shuffling BN' 
+    in Section 3.3)."""
+
     def __init__(self, num_gpus, axis=1, *args, **kwargs):
         if axis != 1 and axis != 3:
             raise NotImplementedError(
                 "Currently, EmulateMultiGPUBatchNorm just supports axis==1 or axis==3"
             )
+        super(EmulateMultiGPUBatchNorm, self).__init__()
         # Only can do axis==3 as otherwise will get error:
         # "InternalError: The CPU implementation of FusedBatchNorm only supports
         #  NHWC tensor format for now. [Op:FusedBatchNormV3]"
-        super(EmulateMultiGPUBatchNorm, self).__init__()
         self.bn_layer = tf.keras.layers.BatchNormalization(
             axis=3, *args, **kwargs
         )
